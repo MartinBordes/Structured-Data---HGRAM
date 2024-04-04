@@ -1,8 +1,13 @@
-torch == 1.5.0
-dgl == 0.4.3post2
+torch
+dgl -f https://data.dgl.ai/wheels/cu121/repo.html
+dglgo -f https://data.dgl.ai/wheels-test/repo.html
 numpy
 networkx
 scipy
 tqdm
 scikit-learn
 pandas
+pydantic
+nltk
+geoopt
+memory_profiler

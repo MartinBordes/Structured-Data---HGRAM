@@ -8,7 +8,7 @@ from hyperbolic import create_ball, mobius_linear
 import geoopt
 from functools import reduce
 # Sends a message of node feature h.
-msg = fn.copy_src(src='h', out='m')
+msg = fn.copy_u(u='h', out='m')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # copied and editted from DGL Source 
@@ -42,13 +42,13 @@ class HyperGraphConv(nn.Module):
             feat = self._manifold.mobius_matvec(weight.T, feat)
 
             graph.ndata['h'] = feat
-            graph.update_all(fn.copy_src(src='h', out='m'),
+            graph.update_all(fn.copy_u(u='h', out='m'),
                              self.custom_sum)
             rst = graph.ndata['h']
         else:
             # aggregate first then mult W
             graph.ndata['h'] = feat
-            graph.update_all(fn.copy_src(src='h', out='m'),
+            graph.update_all(fn.copy_u(u='h', out='m'),
                              self.custom_sum)
             rst = graph.ndata['h']
             rst = self._manifold.mobius_matvec(weight.T, rst)
@@ -91,7 +91,7 @@ class Classifier(nn.Module):
         
         for i, (name, param) in enumerate(self.config):
             
-            if name is 'Linear':
+            if name == 'Linear':
                 if self.LinkPred_mode:
                     w = geoopt.ManifoldParameter(torch.ones(param[1], param[0] * 2), manifold=self._manifold)
                 else:
@@ -99,14 +99,14 @@ class Classifier(nn.Module):
                 init.kaiming_normal_(w)
                 self.vars.append(w)
                 self.vars.append(geoopt.ManifoldParameter(torch.zeros(param[1]), manifold=self._manifold))
-            if name is 'HyperGraphConv':
+            if name == 'HyperGraphConv':
                 # param: in_dim, hidden_dim
                 w = geoopt.ManifoldParameter(torch.Tensor(param[0], param[1]), manifold=self._manifold)
                 init.xavier_uniform_(w)
                 self.vars.append(w)
                 self.vars.append(geoopt.ManifoldParameter(torch.zeros(param[1]), manifold=self._manifold))
                 self.hyper_graph_conv.append(HyperGraphConv(param[0], param[1], activation = F.relu))
-            if name is 'Attention':
+            if name == 'Attention':
                 # param[0] hidden size
                 # param[1] attention_head_size
                 # param[2] hidden_dim for classifier
@@ -156,7 +156,7 @@ class Classifier(nn.Module):
         h = h.to(device)
 
         for name, param in self.config:
-            if name is 'HyperGraphConv':
+            if name == 'HyperGraphConv':
                 w, b = vars[idx], vars[idx + 1]
                 conv = self.hyper_graph_conv[idx_gcn]
                 
@@ -180,12 +180,12 @@ class Classifier(nn.Module):
                     else:
                         h = h[to_fetch + offset]
                         
-            if name is 'Linear':
+            if name == 'Linear':
                 w, b = vars[idx], vars[idx + 1]
                 h = mobius_linear(h, w, b, ball=self._manifold)
                 idx += 2
 
-            if name is 'Attention':
+            if name == 'Attention':
                 w_q, w_k, w_v, w_l = vars[idx], vars[idx + 1], vars[idx + 2], vars[idx + 3]
                 b_q, b_k, b_v, b_l = vars[idx + 4], vars[idx + 5], vars[idx + 6], vars[idx + 7]
 
@@ -207,7 +207,7 @@ class Classifier(nn.Module):
     def zero_grad(self, vars=None):
 
         with torch.no_grad():
-            if vars is None:
+            if vars == None:
                 for p in self.vars:
                     if p.grad is not None:
                         p.grad.zero_()
