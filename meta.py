@@ -63,8 +63,9 @@ def proto_loss_qry(logits, y_t, prototypes):
     n_classes = len(classes)
 
     n_query = int(logits.shape[0]/n_classes)
-
-    query_idxs = torch.stack(list(map(lambda c: target_cpu.eq(c).nonzero(), classes))).view(-1)
+    # max_size = max(target_cpu.eq(c).nonzero().size(0) for c in classes)
+    # query_idxs = torch.stack([torch.nn.functional.pad(target_cpu.eq(c).nonzero(), (0, max_size - target_cpu.eq(c).nonzero().size(0), 0, 0), value=-1) for c in classes]).view(-1)
+    query_idxs = torch.stack(list(map(lambda c: target_cpu.eq(c).nonzero()[:n_query], classes))).view(-1)
     query_samples = input_cpu[query_idxs]
 
     dists = hyperbolic_dist(query_samples, prototypes)
