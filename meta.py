@@ -81,6 +81,78 @@ def proto_loss_qry(logits, y_t, prototypes):
     acc_val = y_hat.eq(target_inds.squeeze()).float().mean()
     return loss_val, acc_val
 
+def proto_loss_qry_old0(logits, y_t, prototypes):
+    target_cpu = y_t.to('cpu')
+    input_cpu = logits.to('cpu')
+
+    classes = torch.unique(target_cpu)
+    n_classes = len(classes)
+
+    n_query = int(logits.shape[0]/n_classes)
+    # Compute the maximum size along the first dimension
+    max_size = max(target_cpu.eq(c).nonzero().size(0) if target_cpu.eq(c).nonzero().dim() > 1 else 0 for c in classes)
+    
+    # Before stacking, pad the tensors to ensure they have the same size along the first dimension
+    query_idxs = torch.stack([torch.nn.functional.pad(target_cpu.eq(c).nonzero(), (0, 0, 0, max_size - target_cpu.eq(c).nonzero().size(0)), value=-1) if target_cpu.eq(c).nonzero().dim() > 1 else target_cpu.eq(c).nonzero() for c in classes]).view(-1)
+
+    # query_idxs = torch.stack(list(map(lambda c: target_cpu.eq(c).nonzero()[:n_query], classes))).view(-1)
+    query_samples = input_cpu[query_idxs]
+
+    dists = hyperbolic_dist(query_samples, prototypes)
+
+    log_p_y = F.log_softmax(-dists, dim=1).view(n_classes, n_query, -1)
+
+    target_inds = torch.arange(0, n_classes)
+    target_inds = target_inds.view(n_classes, 1, 1)
+    target_inds = target_inds.expand(n_classes, n_query, 1).long()
+
+    loss_val = -log_p_y.gather(2, target_inds).squeeze().view(-1).mean()
+    _, y_hat = log_p_y.max(2)
+    acc_val = y_hat.eq(target_inds.squeeze()).float().mean()
+    return loss_val, acc_val
+
+def proto_loss_qry_old(logits, y_t, prototypes):
+    target_cpu = y_t.to('cpu')
+    input_cpu = logits.to('cpu')
+
+    classes = torch.unique(target_cpu)
+    n_classes = len(classes)
+
+    n_query = int(logits.shape[0] / n_classes)
+
+    query_idxs = []
+    for c in classes:
+        idxs = target_cpu.eq(c).nonzero().squeeze()
+        if idxs.numel() < n_query:
+            # If there are fewer query samples than expected, pad with -1
+            idxs = torch.cat([idxs, torch.full((n_query - idxs.numel(),), -1, dtype=torch.long)])
+        query_idxs.append(idxs)
+
+    max_length = max(len(idxs) for idxs in query_idxs)
+    query_idxs_padded = [torch.cat((idxs, torch.tensor([-1] * (max_length - len(idxs)), dtype=torch.long))) for idxs in query_idxs]
+    query_idxs_stacked = torch.stack(query_idxs_padded)
+
+    # Create a mask tensor to select only valid indices and ignore the padded ones
+    mask = (query_idxs_stacked != -1)
+    # Expand mask dimensions to match the shape of the tensor being indexed
+    mask = mask.unsqueeze(-1).expand(mask.shape[0], mask.shape[1], input_cpu.shape[-1])
+
+    query_samples = input_cpu[mask]
+
+    dists = hyperbolic_dist(query_samples, prototypes)
+
+    log_p_y = F.log_softmax(-dists, dim=1).view(n_classes, n_query, -1)
+
+    target_inds = torch.arange(0, n_classes)
+    target_inds = target_inds.view(n_classes, 1, 1)
+    target_inds = target_inds.expand(n_classes, n_query, 1).long()
+
+    loss_val = -log_p_y.gather(2, target_inds).squeeze().view(-1).mean()
+    _, y_hat = log_p_y.max(2)
+    acc_val = y_hat.eq(target_inds.squeeze()).float().mean()
+    return loss_val, acc_val
+
+
 
 class Meta(nn.Module):
     def __init__(self, args, config):
